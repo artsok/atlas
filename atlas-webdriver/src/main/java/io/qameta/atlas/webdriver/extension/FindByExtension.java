@@ -4,7 +4,7 @@ import io.qameta.atlas.core.Atlas;
 import io.qameta.atlas.core.api.MethodExtension;
 import io.qameta.atlas.core.api.Target;
 import io.qameta.atlas.core.internal.Configuration;
-import io.qameta.atlas.core.target.HardcodedTarget;
+import io.qameta.atlas.core.target.LazyTarget;
 import io.qameta.atlas.core.util.MethodInfo;
 import org.openqa.selenium.By;
 import org.openqa.selenium.SearchContext;
@@ -38,15 +38,18 @@ public class FindByExtension implements MethodExtension {
         assert method.isAnnotationPresent(FindBy.class);
 
         final Map<String, String> parameters = getParamValues(method, methodInfo.getArgs());
-        final String xpath = processParamTemplate(method.getAnnotation(FindBy.class).value(), parameters);
+        final FindBy findBy = method.getAnnotation(FindBy.class);
+        final By by = findBy.selector().buildBy(processParamTemplate(findBy.value(), parameters));
 
         final SearchContext searchContext = (SearchContext) proxy;
-        final String name = Optional.ofNullable(method.getAnnotation(Name.class)).map(Name::value)
+        final String name = Optional.ofNullable(method.getAnnotation(Name.class))
+                .map(Name::value)
+                .map(template -> processParamTemplate(template, parameters))
                 .orElse(method.getName());
 
         final Configuration childConfiguration = configuration.child();
-        final Target target = new HardcodedTarget(name, searchContext.findElement(By.xpath(xpath)));
+        final Target elementTarget = new LazyTarget(name, () -> searchContext.findElement(by));
         return new Atlas(childConfiguration)
-                .create(target, method.getReturnType());
+                .create(elementTarget, method.getReturnType());
     }
 }
